@@ -1,4 +1,4 @@
-# 🤖 Projecte Xatbot - LAN Party EcoTech
+# 🤖 Projecte Xatbot - Talentosa
 
 Aquest repositori conté el desenvolupament del xatbot d'intel·ligència artificial per a la **Talentosa**, creat dins del Repte 1.4 del cicle SMX. L'objectiu d'aquest xatbot és resoldre dubtes dels participants sobre l'esdeveniment, la normativa i el suport tècnic.
 
