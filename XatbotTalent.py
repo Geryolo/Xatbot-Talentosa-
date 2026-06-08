@@ -1,28 +1,29 @@
-# 1. INSTAL·LACIÓ
-!pip install -q -U google-genai flask-cors pyngrok beautifulsoup4 requests
+# 1. INSTAL·LACIÓ (Canviada a la llibreria estable)
+!pip install -q -U google-generativeai flask-cors pyngrok beautifulsoup4 requests
 !pip install requests==2.32.4
 
 import json, requests, time, re
+import google.generativeai as genai  # Llibreria estable
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pyngrok import ngrok
 from google.colab import userdata
-from google import genai
 
 # --- CONFIGURACIÓ DE SEGURETAT ---
 try:
-    client = genai.Client(api_key=userdata.get('GOOGLE_API_KEY'))
+    # Configurem la API Key de forma clàssica
+    genai.configure(api_key=userdata.get('GOOGLE_API_KEY'))
     ngrok.set_auth_token(userdata.get('token_ngrok'))
-    print("✅ API i ngrok connectats.")
+    print("✅ API i ngrok connectats correctament.")
 except Exception as e:
     print(f"❌ ERROR SECRETS: {e}")
 
 app = Flask(__name__)
 CORS(app)
 
-# --- EXTRACTOR INTEL·LIGENT FORÇAT ---
+# --- EXTRACTOR INTEL·LIGENT ---
 URL_BASE = "https://gmartin.inscastellbisbal.net/"
 dades_gerard = []
 
@@ -33,11 +34,10 @@ def executar_extractor_total():
     urls_visitades = set()
     domini = urlparse(URL_BASE).netloc
 
-    print(f"🚀 Iniciant extracció forçada de {URL_BASE}...")
+    print(f"🚀 Iniciant extracció de {URL_BASE}...")
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
 
     try:
@@ -49,14 +49,12 @@ def executar_extractor_total():
                 link = post.get('link')
                 if link and link not in urls_per_visitar:
                     urls_per_visitar.append(link)
-            print(f"📂 Èxit! Trobats {len(posts)} posts interns a través de l'API de WordPress.")
-    except Exception:
-        print("⚠️ No s'ha pogut llistar via API, buscant per enllaços tradicionals...")
+    except:
+        pass
 
     while urls_per_visitar and len(urls_visitades) < 200:
         url = urls_per_visitar.pop(0)
-
-        if url in urls_visitades or any(x in url.lower() for x in ['.jpg', '.jpeg', '.png', '.gif', '.pdf', 'wp-admin', 'replytocom']):
+        if url in urls_visitades or any(x in url.lower() for x in ['.jpg', '.png', 'wp-admin']):
             continue
 
         try:
@@ -66,94 +64,63 @@ def executar_extractor_total():
 
             soup = BeautifulSoup(res.text, 'html.parser')
             urls_visitades.add(url)
+            titol = soup.title.string.strip() if soup.title else "Pàgina"
 
-            titol = soup.title.string.strip() if soup.title else "Pàgina sense títol"
-
-            blocs_text = []
-            for element in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'li']):
-                text = element.get_text(strip=True)
-                if len(text) > 4 and not any(x in text.lower() for x in ['propietari', 'powered by', 'utilitza wordpress']):
-                    blocs_text.append(text)
-
+            blocs_text = [element.get_text(strip=True) for element in soup.find_all(['p', 'h1', 'h2', 'h3', 'li']) if len(element.get_text()) > 10]
             contingut_net = " ".join(blocs_text)
 
-            if len(contingut_net) > 15:
+            if len(contingut_net) > 20:
                 dades_gerard.append({"url": url, "titol": titol, "contingut": contingut_net})
-                print(f"✅ [{len(urls_visitades)}] Guardat a la BBDD: {titol[:50]}")
+                print(f"✅ Guardat: {titol[:40]}")
 
             for a in soup.find_all('a', href=True):
                 enllac = urljoin(URL_BASE, a['href']).split('#')[0]
-                if urlparse(enllac).netloc == domini and enllac not in urls_visitades and enllac not in urls_per_visitar:
+                if urlparse(enllac).netloc == domini and enllac not in urls_visitades:
                     urls_per_visitar.append(enllac)
-
-        except Exception:
+        except:
             continue
 
-    with open('dades_gerard_total.json', 'w', encoding='utf-8') as f:
-        json.dump(dades_gerard, f, ensure_ascii=False, indent=4)
-    print(f"\n📁 BBDD FINALITZADA: {len(dades_gerard)} pàgines i entrades guardades amb èxit!")
-
-# --- CERCADOR INTEL·LIGENT MILLORAT ---
+# --- CERCADOR ---
 def trobar_pagines_rellevants(pregunta, maxim=3):
     paraules = [p.lower() for p in re.findall(r'\w+', pregunta) if len(p) > 3]
     resultats = []
-
     for pagina in dades_gerard:
-        text_pagina = (pagina['titol'] + " " + pagina['contingut']).lower()
-        puntuacio = sum(2 for p in paraules if p in text_pagina)
-        if any(p in pagina['titol'].lower() for p in paraules):
-            puntuacio += 5
+        puntuacio = sum(2 for p in paraules if p in (pagina['titol'] + pagina['contingut']).lower())
         resultats.append((puntuacio, pagina))
-
     resultats.sort(key=lambda x: x[0], reverse=True)
     return [r[1] for r in resultats[:maxim]]
 
-# --- LÒGICA IA MILLORADA ---
+# --- LÒGICA IA (CORREGIDA PER EVITAR 404) ---
 def demanar_a_ia(pregunta):
     pagines_filtrades = trobar_pagines_rellevants(pregunta, maxim=5)
-
-    context = (
-        "Ets l'assistent del portafolis d'en Gerard Martin. "
-        "Respon de forma amable, propera i professional en català. "
-        "Analitza i utilitza TOTA la informació real del seu web que tens aquí sota per respondre a l'usuari. "
-        "No inventis res. Si l'usuari et pregunta per un Reto o Repte, "
-        "busca bé en els textos que et passo a continuació:\n\n"
-    )
-
+    
+    context = "Ets l'assistent d'en Gerard Martin. Respon en català usant aquesta info:\n\n"
     for d in pagines_filtrades:
-        context += f"--- INICI ARTÍCLE: {d['titol']} ---\n"
-        context += f"Contingut complet: {d['contingut']}\n"
-        context += f"URL: {d['url']}\n"
-        context += "--------------------------------------\n\n"
-
-    prompt_final = f"{context}\nPregunta de l'usuari: {pregunta}\nResposta del chatbot en català:"
+        context += f"- {d['titol']}: {d['contingut'][:500]} (URL: {d['url']})\n\n"
+    
+    prompt_final = f"{context}\nPregunta: {pregunta}\nResposta amable en català:"
 
     try:
-        # --- AQUÍ S'HA FET EL CANVI ---
-        response = client.models.generate_content(
-            model="gemini-1.5-flash-latest", 
-            contents=prompt_final
-        )
+        # FEM SERVIR EL MODEL FLASH AMB LA LLIBRERIA ESTABLE
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(prompt_final)
         return response.text
     except Exception as e:
-        return f"Error processant la resposta de la IA: {str(e)}"
+        return f"Error en la IA: {str(e)}"
 
-# --- RUTES I SERVIDOR ---
+# --- RUTES ---
 @app.route('/ask', methods=['POST'])
 def ask():
     try:
         msg = request.json.get("message")
-        print(f"📩 Usuari pregunta: {msg}")
         resposta = demanar_a_ia(msg)
         return jsonify({"reply": resposta})
     except Exception as e:
-        print(f"❌ Error BackEnd: {e}")
         return jsonify({"reply": f"Error: {str(e)}"}), 500
 
 if __name__ == '__main__':
     executar_extractor_total()
     !pkill ngrok
-    time.sleep(2)
     public_url = ngrok.connect(5000).public_url
-    print(f"\n🌍 URL PER AL TEU JAVASCRIPT:\n{public_url}/ask\n")
+    print(f"\n🌍 COPIA AQUESTA URL AL TEU HTML:\n{public_url}/ask\n")
     app.run(port=5000)
