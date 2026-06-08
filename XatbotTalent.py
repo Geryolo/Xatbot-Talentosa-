@@ -1,13 +1,15 @@
 # =====================================================
 # CHATBOT GERARD MARTIN - Google Colab
+# Llibreria: google-genai (nova, substitueix google-generativeai)
 # =====================================================
 
 # 1. INSTAL·LACIÓ
-!pip install -q -U google-generativeai flask-cors pyngrok beautifulsoup4 requests
+!pip install -q google-genai flask-cors pyngrok beautifulsoup4
 !pip install -q requests==2.32.4
 
 import json, requests, time, re
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from flask import Flask, request, jsonify
@@ -16,10 +18,10 @@ from pyngrok import ngrok
 from google.colab import userdata
 
 # =====================================================
-# 2. CONFIGURACIÓ (API Keys dels Secrets de Colab)
+# 2. CONFIGURACIÓ
 # =====================================================
 try:
-    genai.configure(api_key=userdata.get('GOOGLE_API_KEY'))
+    client = genai.Client(api_key=userdata.get('GOOGLE_API_KEY'))
     ngrok.set_auth_token(userdata.get('token_ngrok'))
     print("✅ API i ngrok connectats correctament.")
 except Exception as e:
@@ -47,7 +49,6 @@ def executar_extractor_total():
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
 
-    # Intentem obtenir posts via API de WordPress
     try:
         api_url = f"{URL_BASE}wp-json/wp/v2/posts?per_page=100"
         res_api = requests.get(api_url, headers=headers, timeout=10)
@@ -101,7 +102,7 @@ def executar_extractor_total():
     print(f"\n✅ Extracció finalitzada. {len(dades_gerard)} pàgines guardades.")
 
 # =====================================================
-# 4. CERCADOR DE PÀGINES RELLEVANTS
+# 4. CERCADOR
 # =====================================================
 def trobar_pagines_rellevants(pregunta, maxim=5):
     paraules = [p.lower() for p in re.findall(r'\w+', pregunta) if len(p) > 3]
@@ -115,7 +116,7 @@ def trobar_pagines_rellevants(pregunta, maxim=5):
     return [r[1] for r in resultats[:maxim]]
 
 # =====================================================
-# 5. LÒGICA IA - MODEL CORREGIT: gemini-1.5-flash-lastet
+# 5. LÒGICA IA - Llibreria nova google-genai
 # =====================================================
 def demanar_a_ia(pregunta):
     pagines_filtrades = trobar_pagines_rellevants(pregunta, maxim=5)
@@ -131,9 +132,10 @@ def demanar_a_ia(pregunta):
     prompt_final = f"{context}\nPregunta de l'usuari: {pregunta}\n\nResposta en català:"
 
     try:
-        # ✅ MODEL ACTUALITZAT A gemini-2.0-flash
-        model = genai.GenerativeModel('gemini-2.0-flash-lite')
-        response = model.generate_content(prompt_final)
+        response = client.models.generate_content(
+            model='gemini-2.0-flash-lite',
+            contents=prompt_final
+        )
         return response.text
     except Exception as e:
         return f"Error en la IA: {str(e)}"
@@ -163,19 +165,15 @@ def index():
 # 7. ARRENCADA
 # =====================================================
 if __name__ == '__main__':
-    # Extreure dades del web
     executar_extractor_total()
 
-    # Tancar ngrok anterior si n'hi ha
     !pkill ngrok
     time.sleep(2)
 
-    # Connectar ngrok
     public_url = ngrok.connect(5000).public_url
     print(f"\n{'='*50}")
     print(f"🌍 URL PER AL TEU HTML:")
     print(f"   {public_url}/ask")
     print(f"{'='*50}\n")
 
-    # Arrencar servidor
     app.run(port=5000)
