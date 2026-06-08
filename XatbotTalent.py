@@ -35,13 +35,11 @@ def executar_extractor_total():
 
     print(f"🚀 Iniciant extracció forçada de {URL_BASE}...")
 
-    # Forcem capçaleres de navegador real per evitar que WordPress bloquegi el bot
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
     }
 
-    # Entrem a l'API de WordPress per agafar els enllaços reals de tots els teus posts de cop
     try:
         api_url = f"{URL_BASE}wp-json/wp/v2/posts?per_page=100"
         res_api = requests.get(api_url, headers=headers, timeout=10)
@@ -131,8 +129,9 @@ def demanar_a_ia(pregunta):
     prompt_final = f"{context}\nPregunta de l'usuari: {pregunta}\nResposta del chatbot en català:"
 
     try:
+        # --- AQUÍ S'HA FET EL CANVI ---
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-1.5-flash-latest", 
             contents=prompt_final
         )
         return response.text
