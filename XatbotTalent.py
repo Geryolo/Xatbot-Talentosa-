@@ -115,7 +115,7 @@ def trobar_pagines_rellevants(pregunta, maxim=5):
     return [r[1] for r in resultats[:maxim]]
 
 # =====================================================
-# 5. LÒGICA IA - MODEL CORREGIT: gemini-2.0-flash
+# 5. LÒGICA IA - MODEL CORREGIT: gemini-1.5-flash-lastet
 # =====================================================
 def demanar_a_ia(pregunta):
     pagines_filtrades = trobar_pagines_rellevants(pregunta, maxim=5)
@@ -132,7 +132,7 @@ def demanar_a_ia(pregunta):
 
     try:
         # ✅ MODEL ACTUALITZAT A gemini-2.0-flash
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         response = model.generate_content(prompt_final)
         return response.text
     except Exception as e:
