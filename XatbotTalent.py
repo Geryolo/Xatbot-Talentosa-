@@ -132,7 +132,7 @@ def demanar_a_ia(pregunta):
 
     try:
         # ✅ MODEL ACTUALITZAT A gemini-2.0-flash
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        model = genai.GenerativeModel('gemini-2.0-flash-lite')
         response = model.generate_content(prompt_final)
         return response.text
     except Exception as e:
